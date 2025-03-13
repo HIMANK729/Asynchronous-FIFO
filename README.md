@@ -19,7 +19,7 @@ Clock Domain Crossing (CDC) occurs when data is transferred between two clock do
 To mitigate these issues, FIFO buffers, two-flop synchronizers, and Gray code encoding are commonly used.
 ![416758599-5da5179b-0c37-4e67-82d5-a8a38bb3b0e8](https://github.com/user-attachments/assets/b6f5d1f1-3462-43c9-9f22-ad3a12a36b31)
 
-![CDC Illustration](path/to/your-cdc-image.png)
+
 
 ## Two-Flop Synchronizers
 The two-flop synchronizer is a widely used technique to reduce metastability. It consists of two cascaded D flip-flops in the receiving clock domain.
@@ -30,7 +30,6 @@ The two-flop synchronizer is a widely used technique to reduce metastability. It
 - **Improves Setup and Hold Timing Margins:** Increases the reliability of data capture.
 ![416758939-60844a43-cbc2-4a67-bc12-26112f662693](https://github.com/user-attachments/assets/b23b6f00-5355-480b-a7a8-26c533fafdf9)
 
-![Two-Flop Synchronizer Illustration](path/to/your-two-flop-image.png)
 
 ## Multi-Bit CDC and Associated Challenges
 When transferring multi-bit signals across clock domains, additional challenges arise:
@@ -57,7 +56,7 @@ An asynchronous FIFO inherently provides a robust solution for multi-bit CDC:
 - **Status Flags (Full & Empty) Are Synchronized:** Ensures safe read and write operations.
 ![416757721-8eefd247-d893-4c0d-a21c-460cc116eaba](https://github.com/user-attachments/assets/aa0a5bb6-5ff8-4211-874d-2b9e11b51f6a)
 
-![Asynchronous FIFO Illustration](path/to/your-async-fifo-image.png)
+
 
 ## Conclusion
 Asynchronous FIFOs play a vital role in managing clock domain crossing issues. Using two-flop synchronizers for control signals and Gray code encoding for multi-bit signals ensures reliable data transfer between asynchronous domains. The implementation of an Asynchronous FIFO with CDC techniques guarantees robustness in high-speed digital systems.

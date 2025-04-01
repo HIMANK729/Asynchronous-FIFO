@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-module tt_um_Kavya
+module tt_um_Himank
 #(parameter WIDTH = 4, 
   parameter DEPTH = 8
 )

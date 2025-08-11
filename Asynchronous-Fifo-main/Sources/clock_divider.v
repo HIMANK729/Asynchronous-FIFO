@@ -1,40 +1,61 @@
 `timescale 1ns / 1ps
-module clock_divider(
-    input clk_in,        // Input clock (assumed 60 MHz for this example)
-    input reset,         // Synchronous reset
-    output reg w_clk,   // 50 MHz write clock output
-    output reg r_clk    // 30 MHz read clock output
+module clock_divider #(
+    parameter integer W_DIV = 12,
+    parameter integer R_DIV = 20
+)(
+    input  wire clk_in,
+    input  wire rst_n,
+    output reg  w_clk,
+    output reg  r_clk
 );
 
-    reg [2:0] wr_counter = 3'b000;  // Counter for write clock division
-    reg [2:0] rd_counter = 3'b000; // Counter for read clock division
+    // Counters for clock division
+    integer w_cnt = 0;
+    integer r_cnt = 0;
 
-    // Generate 50 MHz clock (divide by 1.2)
-    always @(posedge clk_in or posedge reset) begin
-        if (reset) begin
-            wr_counter <= 3'b000;
+    initial begin
+        w_clk = 1'b0;
+        r_clk = 1'b0;
+    end
+
+    // Write clock divider
+    always @(posedge clk_in or negedge rst_n) begin
+        if (!rst_n) begin
             w_clk <= 1'b0;
-        end else if (wr_counter == 1) begin
-            wr_counter <= 3'b000;
-            w_clk <= ~w_clk;
+            w_cnt <= 0;
         end else begin
-            wr_counter <= wr_counter + 1'b1;
+            if (W_DIV <= 2) begin
+                w_clk <= ~w_clk;
+            end else begin
+                if (w_cnt >= (W_DIV - 1)) begin
+                    w_cnt <= 0;
+                    w_clk <= ~w_clk;
+                end else begin
+                    w_cnt <= w_cnt + 1;
+                end
+            end
         end
     end
 
-    // Generate 30 MHz clock (approximate divide by 2)
-    always @(posedge clk_in or posedge reset) begin
-        if (reset) begin
-            rd_counter <= 3'b000;
+    // Read clock divider (FIXED)
+    always @(posedge clk_in or negedge rst_n) begin
+        if (!rst_n) begin
             r_clk <= 1'b0;
-        end else if (rd_counter == 2) begin
-            rd_counter <= 3'b000;
-            r_clk <= ~r_clk;
+            r_cnt <= 0;
         end else begin
-            rd_counter <= rd_counter + 1'b1;
+            if (R_DIV <= 2) begin
+                r_clk <= ~r_clk;
+            end else begin
+                if (r_cnt >= (R_DIV - 1)) begin
+                    r_cnt <= 0;
+                    r_clk <= ~r_clk;
+                end else begin
+                    r_cnt <= r_cnt + 1;
+                end
+            end
         end
     end
 
-
+endmodule
 
 endmodule

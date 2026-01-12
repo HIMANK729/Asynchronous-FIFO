@@ -1,136 +1,309 @@
-`timescale 1ns / 1ps
-
-module testbench();
-
-    parameter WIDTH = 4, DEPTH = 8;
-    parameter W_DIV = 4;  // 100MHz/4 = 25MHz write clock
-    parameter R_DIV = 6;  // 100MHz/6 ≈ 16.67MHz read clock
-
-    reg clk_in;
-    reg rst_n;
-    reg wr_rq, rd_rq;
-    wire full, empty;
-    reg [WIDTH-1:0] wdata;
-    wire [WIDTH-1:0] rdata;
-
-    // Reference model
-    reg [WIDTH-1:0] ref_fifo [0:DEPTH-1];
-    reg [$clog2(DEPTH)-1:0] wptr;
-    reg [$clog2(DEPTH)-1:0] rptr;
-    reg [WIDTH-1:0] expected_data;
-    integer error_count = 0;
-
-    // Get clocks from DUT
-    wire w_clk;
-    wire r_clk;
-
-    // Instantiate DUT
-    tt_um_Himank #(
-        .WIDTH(WIDTH),
-        .DEPTH(DEPTH),
-        .W_DIV(W_DIV),
-        .R_DIV(R_DIV)
-    ) fifo_inst (
-        .clk_in(clk_in),
-        .rst_n(rst_n),
-        .wr_rq(wr_rq),
-        .rd_rq(rd_rq),
-        .wdata(wdata),
-        .rdata(rdata),
-        .full(full),
-        .empty(empty),
-        .w_clk(w_clk),    // Connect internal clocks
-        .r_clk(r_clk)     // to testbench wires
-    );
-
-    // Main clock (100MHz)
-    initial begin
-        clk_in = 0;
-        forever #5 clk_in = ~clk_in;
+module test ;
+  parameter DEPTH=8;
+  parameter WIDTH=4;
+  reg wclk;
+reg rclk;
+reg wen;
+reg ren;
+reg rst;
+  reg [DEPTH-1:0]data;
+  wire [DEPTH-1:0]out; 
+  wire full;
+wire empty;
+  reg [4:0]c;
+  reg[10*8-1:0]char;
+  
+  integer i;
+afifo dut (
+wclk,
+rclk,
+wen,
+ren,
+rst,
+data,
+out, 
+full,
+empty
+);
+  initial begin
+  wclk=0;
+  rclk=0;
+    wen=0;
+    ren=0;
+    data=0;
+    c=0;
+    rst=1;
+    if(!$value$plusargs("char=%s",char))begin
+           char="reset";
     end
 
-    // Seed random for reproducibility using a dedicated seed variable
-    integer seed;
-    initial begin
-        seed = 1;  // Set seed value
+  end 
+  
+  initial begin 
+    $dumpfile("out.vcd");
+    $dumpvars(0,test);
+  end
+  
+ /* initial begin
+        $monitor("Time: %0t | Rst: %b | Wen: %b | Empty: %b | Out: %h", $time, rst, wen, empty, out);
+    end*/
+  
+  always #5 wclk=~wclk;
+  always #10 rclk=~rclk;
+  
+  initial 
+    begin 
+      rst=1;
+      @(posedge wclk);
+      @(posedge rclk);
+      rst=0;
+      @(posedge rclk);
+      case(char)
+        "reset":reset();
+        "afull":begin afull();  end
+        "aempty":begin aempty();  end
+        "write":begin write(); end
+        "read":begin read(); end
+        "overflow":begin overflow(); end
+        "underflow":begin underflow();end
+        "wrap":begin wrap(); end
+        "sw":begin sw(); end
+          default: begin $display("INPUT THE VALID TESTCASE");
+                   c=c+1;
+                     end
+        
+      endcase
+     #10
+      if(c==0)
+        $display("success");
+      else
+        $display ("Fail");
+    $finish;
     end
-
-    // Waveform dumping
-    initial begin
-        $dumpfile("fifo_waveform.vcd");  // VCD file name
-        $dumpvars(0, testbench);          // Dump all signals in testbench and instantiated modules
+ 
+ 
+  
+  task write;
+    begin
+      fork  
+      begin
+        @(negedge wclk);
+        wen<=1;
+        data<=12;
+        @(negedge wclk);
+        wen<=0;
+      end 
+        
+       begin
+         repeat(3)  @(posedge rclk);
+       end
+      join 
+     // $display("%0d",empty);
+      if(empty==1)
+        c<=c+1;
+      else
+      c<=c;
     end
+  endtask
 
-    // Reset and stimulus
-    initial begin
-        // Initialize
-        rst_n = 1;
-        wr_rq = 0;
-        rd_rq = 0;
-        wdata = 0;
-        wptr = 0;
-        rptr = 0;
-        for (int i = 0; i < DEPTH; i++) ref_fifo[i] = 0;
-        expected_data = 0;
 
-        // Reset sequence
-        #10 rst_n = 0;
-        #20; // Hold reset
-        wptr = 0;
-        rptr = 0;
-        for (int i = 0; i < DEPTH; i++) ref_fifo[i] = 0;
-        #10 rst_n = 1;
-
-        // Start operations
-        #15;
-        wr_rq = 1;
-        rd_rq = 1;
-
-        fork
-            // Write process uses FIFO's w_clk
-            begin : write_block
-                repeat (150) begin
-                    @(posedge w_clk);
-                    if (!full) begin
-                        wdata = $random(seed);
-                        ref_fifo[wptr] = wdata;
-                        wptr = (wptr + 1) % DEPTH;
-                        $display("WRITE: data=%0d wptr=%0d @%0t", wdata, wptr, $time);
-                    end
-                end
-                wr_rq = 0;
-            end
-
-            // Read process uses FIFO's r_clk
-            begin : read_block
-                repeat (2) @(posedge r_clk); // Sync delay
-
-                repeat (150) begin
-                    @(posedge r_clk);
-                    #1; // Sample after clock edge
-
-                    if (!empty && rd_rq) begin
-                        expected_data = ref_fifo[rptr];
-                        if (rdata !== expected_data) begin
-                            $display("ERROR: Expected %0d, got %0d @%0t (rptr=%0d)", 
-                                     expected_data, rdata, $time, rptr);
-                            error_count++;
-                        end
-                        else 
-                            $display("READ OK: %0d rptr=%0d @%0t", rdata, rptr, $time);
-                        rptr = (rptr + 1) % DEPTH;
-                    end
-                end
-                rd_rq = 0;
-            end
-        join
-
-        #100; // Allow pending operations
-        if (error_count == 0)
-            $display("Simulation completed successfully.");
-        else
-            $display("Simulation completed with %0d errors.", error_count);
-        $finish;
+task read;
+    begin
+      fork  
+      begin
+        @(negedge wclk);
+        wen<=1;
+        data<=12;
+        @(negedge wclk);
+        wen<=0;
+      end 
+        
+       begin
+         repeat(3)  @(posedge rclk);
+       end
+      join 
+      @(negedge rclk);
+        ren<=1;
+      @(negedge rclk);
+        ren<=0;
+      
+      if(out==12)
+        c<=c;
+      else
+      c<=c+1;
     end
+  
+  endtask
+  
+  
+  task afull;
+    begin 
+   
+      for(i=0;i<WIDTH+1;i++)begin 
+        @(negedge wclk);
+        wen=1;
+      data=$random;
+        //@(posedge wclk);
+        //wen=0;
+        
+        //$display("%0d,%0d",full,dut.mem[i]); 
+      end
+      // @(posedge wclk);
+   wen=0;
+   //     @(posedge wclk);
+   $display("%0d",full);
+      if(full==0)
+        c=c+1;
+      else
+        c=c;
+    end 
+  endtask 
+  
+  task reset;
+    begin
+    
+      @(negedge wclk);
+    rst=0;
+      wen=1;
+      data=1;
+      @(negedge wclk);
+      wen=0;
+      repeat(2)    @(posedge rclk);
+      @(negedge wclk);
+      rst=1;
+      @(negedge wclk);
+    rst=0;
+      
+      if(empty==1)
+         c<=c;
+      else
+        c<=c+1;
+    end
+           
+  endtask
+  
+  
+  task aempty;
+    begin
+    afull();
+        
+       // $display("%0d,%0d",full,dut.mem[i]); 
+     
+      @(posedge rclk);
+      i=0;
+      for(i=0;i<WIDTH+1;i++)begin 
+        @(negedge rclk);
+        ren=1;
+        end 
+//  @(negedge rclk);
+        ren=0;
 
+      
+      if(empty==1)
+        c=c;
+      else
+        c=c+1;
+    end
+  endtask
+  
+  task overflow;
+    begin
+    afull();
+  @(negedge wclk);
+    wen=1;
+  @(negedge wclk);
+    wen=0;
+    
+  if( dut.wptr==3'b100 &&full!=0)
+    c=c;
+  else
+    c=c+1;
+      end
+      endtask
+  
+  
+  task underflow;
+  begin
+    aempty();
+  @(negedge rclk);
+    ren=1;
+  @(negedge rclk);
+    ren=0;
+    #10
+  if(empty==1)
+    c=c;
+  else
+    c=c+1;
+      end
+      endtask
+  
+  
+  task sw;
+    begin 
+      @(negedge wclk);
+        wen=1;
+        data=12;
+      //$display("%0d",data);
+      @(negedge wclk);
+        wen=0;
+      repeat(3) @(posedge rclk);
+      
+      fork
+        begin 
+          @(negedge wclk);
+        wen=1;
+        data=13;
+          //$display("%0d",data);
+          @(negedge wclk);
+        wen=0;
+       end
+        
+        begin 
+          @(negedge rclk);
+        ren=1;
+          @(negedge rclk);
+        ren=0; 
+         // $display("%0d",out);
+        end
+      
+      join
+      @(negedge rclk);
+        ren=1;
+      @(negedge rclk);
+        ren=0; 
+      //    $display("%0d",out);
+      
+   #10      
+      if(out==4'hd)
+        c=c;
+      else
+        c=c+1;
+    end
+  endtask
+  
+  task wrap;
+    begin
+      afull();
+     @(negedge rclk);
+        ren=1;
+      @(negedge rclk);
+        ren=0; 
+      @(negedge wclk);
+    wen=1;
+    data=2;
+      @(negedge wclk);
+    wen=0;
+      for(i=0;i<WIDTH+1;i++)begin 
+        @(negedge rclk);
+        ren=1;
+        @(negedge rclk);
+        ren=0;
+       end
+       $display("%0d   %0d",c,out);
+      if(out == 2)
+        c=c;
+      else
+        c=c+1;
+    end
+  endtask
 endmodule
